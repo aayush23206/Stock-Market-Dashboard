@@ -25,7 +25,7 @@ try:
     TENSORFLOW_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
     TENSORFLOW_AVAILABLE = False
-    print("⚠️  TensorFlow not available - LSTM forecasting will be disabled")
+    print("[WARNING] TensorFlow not available - LSTM forecasting will be disabled")
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
