@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from utils import get_stock_data, get_multiple_stocks
 from eda_analysis import StockEDA, CorrelationAnalyzer, prepare_data_for_forecasting
-from forecasting import ARIMAForecaster, LSTMForecaster, ForecastComparison
+from forecasting import ARIMAForecaster, ForecastComparison, TENSORFLOW_AVAILABLE
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -303,7 +303,13 @@ elif tab_selection == "🔮 Price Forecasting":
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            forecast_model = st.selectbox("Forecasting Model", ["ARIMA", "LSTM", "Compare All"])
+            model_options = ["ARIMA"]
+            if TENSORFLOW_AVAILABLE:
+                model_options.extend(["LSTM", "Compare All"])
+            else:
+                st.info("💡 TensorFlow not available - LSTM disabled. Using ARIMA only.")
+            
+            forecast_model = st.selectbox("Forecasting Model", model_options)
         
         with col2:
             forecast_days = st.number_input("Forecast Days", min_value=5, max_value=90, value=30)
@@ -416,117 +422,146 @@ elif tab_selection == "🔮 Price Forecasting":
                         st.error(f"Error in ARIMA forecasting: {str(e)}")
                 
                 elif forecast_model == "LSTM":
-                    try:
-                        forecaster = LSTMForecaster(train_data, lookback=lookback)
-                        fit_info = forecaster.fit(epochs=30)
-                        forecast_values = forecaster.forecast(forecast_days)
-                        
-                        st.success("✅ LSTM Forecast Complete!")
-                        
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("Model", "LSTM")
-                        with col2:
-                            st.metric("Next Price (Avg)", f"${forecast_values[-1]:.2f}")
-                        with col3:
-                            st.metric("Forecast Days", forecast_days)
-                        with col4:
-                            pct_change = ((forecast_values[-1] - full_series.iloc[-1]) / full_series.iloc[-1]) * 100
-                            st.metric("Expected Change", f"{pct_change:+.2f}%", delta=pct_change)
-                        
-                        # Visualization
-                        future_dates = pd.date_range(
-                            start=full_series.index[-1],
-                            periods=forecast_days + 1,
-                            freq='D'
-                        )[1:]
-                        
-                        fig = go.Figure()
-                        
-                        fig.add_trace(go.Scatter(
-                            x=full_series.index,
-                            y=full_series.values,
-                            mode='lines',
-                            name='Historical Price',
-                            line=dict(color='green')
-                        ))
-                        
-                        fig.add_trace(go.Scatter(
-                            x=future_dates,
-                            y=forecast_values,
-                            mode='lines',
-                            name='LSTM Forecast',
-                            line=dict(color='orange', dash='dash')
-                        ))
-                        
-                        fig.update_layout(
-                            title=f'{ticker_input} LSTM Forecast ({forecast_days} days)',
-                            xaxis_title='Date',
-                            yaxis_title='Price (USD)',
-                            template='plotly_white',
-                            hovermode='x unified',
-                            height=500
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Model evaluation
-                        st.subheader("Model Evaluation")
-                        eval_metrics = forecaster.evaluate(test_data)
-                        
-                        eval_df = pd.DataFrame({
-                            'Metric': ['RMSE', 'MAE', 'MAPE (%)', 'R² Score'],
-                            'Value': [
-                                f"${eval_metrics['rmse']:.2f}",
-                                f"${eval_metrics['mae']:.2f}",
-                                f"{eval_metrics['mape']:.2f}%",
-                                f"{eval_metrics['r2_score']:.4f}"
-                            ]
-                        })
-                        st.dataframe(eval_df, use_container_width=True, hide_index=True)
-                        
-                    except Exception as e:
-                        st.error(f"Error in LSTM forecasting: {str(e)}")
+                    if not TENSORFLOW_AVAILABLE:
+                        st.error("⚠️ TensorFlow is not available. Please use ARIMA or install TensorFlow locally.")
+                    else:
+                        try:
+                            from forecasting import LSTMForecaster
+                            forecaster = LSTMForecaster(train_data, lookback=lookback)
+                            fit_info = forecaster.fit(epochs=30)
+                            forecast_values = forecaster.forecast(forecast_days)
+                            
+                            st.success("✅ LSTM Forecast Complete!")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Model", "LSTM")
+                            with col2:
+                                st.metric("Next Price (Avg)", f"${forecast_values[-1]:.2f}")
+                            with col3:
+                                st.metric("Forecast Days", forecast_days)
+                            with col4:
+                                pct_change = ((forecast_values[-1] - full_series.iloc[-1]) / full_series.iloc[-1]) * 100
+                                st.metric("Expected Change", f"{pct_change:+.2f}%", delta=pct_change)
+                            
+                            # Visualization
+                            future_dates = pd.date_range(
+                                start=full_series.index[-1],
+                                periods=forecast_days + 1,
+                                freq='D'
+                            )[1:]
+                            
+                            fig = go.Figure()
+                            
+                            fig.add_trace(go.Scatter(
+                                x=full_series.index,
+                                y=full_series.values,
+                                mode='lines',
+                                name='Historical Price',
+                                line=dict(color='green')
+                            ))
+                            
+                            fig.add_trace(go.Scatter(
+                                x=future_dates,
+                                y=forecast_values,
+                                mode='lines',
+                                name='LSTM Forecast',
+                                line=dict(color='orange', dash='dash')
+                            ))
+                            
+                            fig.update_layout(
+                                title=f'{ticker_input} LSTM Forecast ({forecast_days} days)',
+                                xaxis_title='Date',
+                                yaxis_title='Price (USD)',
+                                template='plotly_white',
+                                hovermode='x unified',
+                                height=500
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Model evaluation
+                            st.subheader("Model Evaluation")
+                            eval_metrics = forecaster.evaluate(test_data)
+                            
+                            eval_df = pd.DataFrame({
+                                'Metric': ['RMSE', 'MAE', 'MAPE (%)', 'R² Score'],
+                                'Value': [
+                                    f"${eval_metrics['rmse']:.2f}",
+                                    f"${eval_metrics['mae']:.2f}",
+                                    f"{eval_metrics['mape']:.2f}%",
+                                    f"{eval_metrics['r2_score']:.4f}"
+                                ]
+                            })
+                            st.dataframe(eval_df, use_container_width=True, hide_index=True)
+                            
+                        except Exception as e:
+                            st.error(f"Error in LSTM forecasting: {str(e)}")
+
                 
                 elif forecast_model == "Compare All":
-                    try:
-                        comparator = ForecastComparison(train_data, test_data)
-                        
-                        st.info("Running all forecasting models...")
-                        
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            with st.spinner("ARIMA..."):
-                                comparator.run_arima()
-                                st.success("ARIMA ✓")
-                        
-                        with col2:
-                            with st.spinner("LSTM..."):
-                                comparator.run_lstm()
-                                st.success("LSTM ✓")
-                        
-                        with col3:
-                            with st.spinner("Naive Baseline..."):
-                                comparator.run_naive_baseline()
-                                st.success("Baseline ✓")
-                        
-                        st.success("✅ All Forecasts Complete!")
-                        
-                        # Comparison summary
-                        st.subheader("Model Comparison Summary")
-                        comparison_df = comparator.get_comparison_summary()
-                        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-                        
-                        # Best model recommendation
-                        best_model = comparison_df.iloc[0]
-                        st.success(
-                            f"### 🏆 Best Model: {best_model['Model']} "
-                            f"(RMSE: ${best_model['RMSE']:.2f})"
-                        )
-                        
-                    except Exception as e:
-                        st.error(f"Error in model comparison: {str(e)}")
+                    if not TENSORFLOW_AVAILABLE:
+                        st.error("⚠️ TensorFlow is not available. 'Compare All' requires LSTM. Using ARIMA only.")
+                        # Fallback to ARIMA comparison
+                        try:
+                            forecaster = ARIMAForecaster(train_data)
+                            forecaster.fit()
+                            forecast_values = forecaster.forecast(forecast_days)
+                            
+                            st.success("✅ ARIMA Forecast Complete!")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Model", "ARIMA")
+                            with col2:
+                                st.metric("Next Price (Avg)", f"${forecast_values[-1]:.2f}")
+                            with col3:
+                                st.metric("Forecast Days", forecast_days)
+                            with col4:
+                                pct_change = ((forecast_values[-1] - full_series.iloc[-1]) / full_series.iloc[-1]) * 100
+                                st.metric("Expected Change", f"{pct_change:+.2f}%", delta=pct_change)
+                            
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                    else:
+                        try:
+                            comparator = ForecastComparison(train_data, test_data)
+                            
+                            st.info("Running all forecasting models...")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                with st.spinner("ARIMA..."):
+                                    comparator.run_arima()
+                                    st.success("ARIMA ✓")
+                            
+                            with col2:
+                                with st.spinner("LSTM..."):
+                                    comparator.run_lstm()
+                                    st.success("LSTM ✓")
+                            
+                            with col3:
+                                with st.spinner("Naive Baseline..."):
+                                    comparator.run_naive_baseline()
+                                    st.success("Baseline ✓")
+                            
+                            st.success("✅ All Forecasts Complete!")
+                            
+                            # Comparison summary
+                            st.subheader("Model Comparison Summary")
+                            comparison_df = comparator.get_comparison_summary()
+                            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                            
+                            # Best model recommendation
+                            best_model = comparison_df.iloc[0]
+                            st.success(
+                                f"### 🏆 Best Model: {best_model['Model']} "
+                                f"(RMSE: ${best_model['RMSE']:.2f})"
+                            )
+                            
+                        except Exception as e:
+                            st.error(f"Error in model comparison: {str(e)}")
 
 st.sidebar.divider()
 st.sidebar.info(

@@ -23,8 +23,9 @@ try:
     from tensorflow.keras.optimizers import Adam
     from sklearn.preprocessing import MinMaxScaler
     TENSORFLOW_AVAILABLE = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     TENSORFLOW_AVAILABLE = False
+    print("⚠️  TensorFlow not available - LSTM forecasting will be disabled")
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
@@ -140,7 +141,9 @@ class LSTMForecaster:
             lookback: Number of previous timesteps to use for prediction
         """
         if not TENSORFLOW_AVAILABLE:
-            raise ImportError("tensorflow not installed. Install via: pip install tensorflow")
+            raise ImportError("TensorFlow not installed. Install via: pip install tensorflow")
+        
+        from sklearn.preprocessing import MinMaxScaler
         
         self.train_data = train_data.values.reshape(-1, 1)
         self.lookback = lookback
